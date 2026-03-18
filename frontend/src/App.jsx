@@ -5,7 +5,7 @@ import {
 } from "recharts";
 
 // ── Embedded API (calls real FastAPI or uses mock data) ───────────────────
-const API_BASE = "https://greenorch-backend.vercel.app";
+const API_BASE = "https://greenorch-api.vercel.app";
 
 async function apiFetch(path, opts = {}) {
   try {
