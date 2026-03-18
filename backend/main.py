@@ -1,12 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Optional
 import random
 import math
-import json
 from datetime import datetime, timedelta
-import statistics
 
 app = FastAPI(
     title="GreenOrch API",
@@ -19,89 +17,22 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ── Simulated Datasets ──────────────────────────────────────────────────────
-
 CARBON_REGIONS = {
-    "us-east": {
-        "name": "US East (N. Virginia)",
-        "carbon_intensity": 0.386,
-        "renewable_pct": 42,
-        "provider": "AWS",
-        "pue": 1.2,
-        "lat": 37.77,
-        "lng": -78.17
-    },
-    "eu-west": {
-        "name": "EU West (Ireland)",
-        "carbon_intensity": 0.198,
-        "renewable_pct": 71,
-        "provider": "AWS",
-        "pue": 1.15,
-        "lat": 53.35,
-        "lng": -6.26
-    },
-    "asia-south": {
-        "name": "Asia South (Mumbai)",
-        "carbon_intensity": 0.708,
-        "renewable_pct": 18,
-        "provider": "GCP",
-        "pue": 1.35,
-        "lat": 19.08,
-        "lng": 72.88
-    },
-    "us-west": {
-        "name": "US West (Oregon)",
-        "carbon_intensity": 0.091,
-        "renewable_pct": 89,
-        "provider": "AWS",
-        "pue": 1.1,
-        "lat": 45.52,
-        "lng": -122.68
-    },
-    "eu-north": {
-        "name": "EU North (Stockholm)",
-        "carbon_intensity": 0.013,
-        "renewable_pct": 98,
-        "provider": "Azure",
-        "pue": 1.08,
-        "lat": 59.33,
-        "lng": 18.07
-    },
-    "ap-southeast": {
-        "name": "AP Southeast (Singapore)",
-        "carbon_intensity": 0.431,
-        "renewable_pct": 35,
-        "provider": "GCP",
-        "pue": 1.25,
-        "lat": 1.35,
-        "lng": 103.82
-    },
-    "eu-central": {
-        "name": "EU Central (Frankfurt)",
-        "carbon_intensity": 0.233,
-        "renewable_pct": 65,
-        "provider": "Azure",
-        "pue": 1.18,
-        "lat": 50.11,
-        "lng": 8.68
-    },
-    "us-central": {
-        "name": "US Central (Iowa)",
-        "carbon_intensity": 0.147,
-        "renewable_pct": 79,
-        "provider": "GCP",
-        "pue": 1.12,
-        "lat": 41.88,
-        "lng": -93.10
-    },
+    "us-east":     {"name": "US East (N. Virginia)",     "carbon_intensity": 0.386, "renewable_pct": 42, "provider": "AWS",   "pue": 1.2,  "lat": 37.77, "lng": -78.17},
+    "eu-west":     {"name": "EU West (Ireland)",         "carbon_intensity": 0.198, "renewable_pct": 71, "provider": "AWS",   "pue": 1.15, "lat": 53.35, "lng": -6.26},
+    "asia-south":  {"name": "Asia South (Mumbai)",       "carbon_intensity": 0.708, "renewable_pct": 18, "provider": "GCP",   "pue": 1.35, "lat": 19.08, "lng": 72.88},
+    "us-west":     {"name": "US West (Oregon)",          "carbon_intensity": 0.091, "renewable_pct": 89, "provider": "AWS",   "pue": 1.1,  "lat": 45.52, "lng": -122.68},
+    "eu-north":    {"name": "EU North (Stockholm)",      "carbon_intensity": 0.013, "renewable_pct": 98, "provider": "Azure", "pue": 1.08, "lat": 59.33, "lng": 18.07},
+    "ap-southeast":{"name": "AP Southeast (Singapore)",  "carbon_intensity": 0.431, "renewable_pct": 35, "provider": "GCP",   "pue": 1.25, "lat": 1.35,  "lng": 103.82},
+    "eu-central":  {"name": "EU Central (Frankfurt)",    "carbon_intensity": 0.233, "renewable_pct": 65, "provider": "Azure", "pue": 1.18, "lat": 50.11, "lng": 8.68},
+    "us-central":  {"name": "US Central (Iowa)",         "carbon_intensity": 0.147, "renewable_pct": 79, "provider": "GCP",   "pue": 1.12, "lat": 41.88, "lng": -93.10},
 }
 
-# Simulated workload history (Google Cluster Workload Trace style)
 def generate_workload_history(n=200):
     records = []
     base = datetime(2024, 1, 1)
@@ -126,11 +57,7 @@ def generate_workload_history(n=200):
 
 WORKLOAD_HISTORY = generate_workload_history()
 
-# ── Pure Python Linear Regression (replaces scikit-learn) ───────────────────
-
 class SimpleLinearRegression:
-    """Pure Python multiple linear regression using least squares (no dependencies)."""
-
     def __init__(self):
         self.coefficients = []
         self.intercept = 0.0
@@ -139,32 +66,20 @@ class SimpleLinearRegression:
     def fit(self, X, y):
         n = len(X)
         num_features = len(X[0])
-
-        # Add bias column (intercept)
         Xb = [[1.0] + list(row) for row in X]
         cols = num_features + 1
-
-        # Normal equation: beta = (X^T X)^-1 X^T y
-        # Build X^T X
         XtX = [[0.0] * cols for _ in range(cols)]
         for row in Xb:
             for i in range(cols):
                 for j in range(cols):
                     XtX[i][j] += row[i] * row[j]
-
-        # Build X^T y
         Xty = [0.0] * cols
         for row, yi in zip(Xb, y):
             for i in range(cols):
                 Xty[i] += row[i] * yi
-
-        # Gaussian elimination to solve XtX * beta = Xty
         beta = self._solve(XtX, Xty, cols)
-
         self.intercept = beta[0]
         self.coefficients = beta[1:]
-
-        # Calculate R²
         y_mean = sum(y) / n
         ss_tot = sum((yi - y_mean) ** 2 for yi in y)
         y_pred = [self._predict_one(x) for x in X]
@@ -173,10 +88,8 @@ class SimpleLinearRegression:
         return self
 
     def _solve(self, A, b, n):
-        # Augmented matrix
         M = [A[i][:] + [b[i]] for i in range(n)]
         for col in range(n):
-            # Pivot
             max_row = max(range(col, n), key=lambda r: abs(M[r][col]))
             M[col], M[max_row] = M[max_row], M[col]
             if abs(M[col][col]) < 1e-12:
@@ -197,29 +110,24 @@ class SimpleLinearRegression:
     def score(self):
         return self.r2
 
-
 def train_prediction_model():
-    X = [[w["hour"], w["day_of_week"], w["execution_time"], w["memory_usage"]]
-         for w in WORKLOAD_HISTORY]
+    X = [[w["hour"], w["day_of_week"], w["execution_time"], w["memory_usage"]] for w in WORKLOAD_HISTORY]
     y = [w["cpu_usage"] for w in WORKLOAD_HISTORY]
     model = SimpleLinearRegression()
     model.fit(X, y)
     return model, model.score()
 
-
 ML_MODEL, ML_SCORE = train_prediction_model()
 
-# ── Core Algorithm ───────────────────────────────────────────────────────────
+POWER_FACTOR = 0.25
 
-POWER_FACTOR = 0.25  # kW per CPU unit
-
-def estimate_energy(cpu_load: float, execution_time: float, pue: float = 1.2) -> float:
+def estimate_energy(cpu_load, execution_time, pue=1.2):
     return cpu_load * POWER_FACTOR * execution_time * pue
 
-def calculate_carbon(energy: float, carbon_intensity: float) -> float:
+def calculate_carbon(energy, carbon_intensity):
     return energy * carbon_intensity
 
-def schedule_workload(cpu_load: float, execution_time: float, memory_usage: float = 0.5):
+def schedule_workload(cpu_load, execution_time, memory_usage=0.5):
     results = []
     for region_id, region in CARBON_REGIONS.items():
         energy = estimate_energy(cpu_load, execution_time, region["pue"])
@@ -234,15 +142,12 @@ def schedule_workload(cpu_load: float, execution_time: float, memory_usage: floa
             "renewable_pct": region["renewable_pct"],
             "pue": region["pue"],
         })
-
     results.sort(key=lambda x: x["carbon_kg"])
     best = results[0]
     traditional = next(r for r in results if r["region_id"] == "us-east")
-
     reduction_pct = (
         (traditional["carbon_kg"] - best["carbon_kg"]) / traditional["carbon_kg"]
     ) * 100 if traditional["carbon_kg"] > 0 else 0
-
     return {
         "selected_region": best,
         "traditional_region": traditional,
@@ -255,8 +160,6 @@ def schedule_workload(cpu_load: float, execution_time: float, memory_usage: floa
         }
     }
 
-# ── Pydantic Models ──────────────────────────────────────────────────────────
-
 class WorkloadRequest(BaseModel):
     cpu_load: float
     execution_time: float
@@ -264,15 +167,15 @@ class WorkloadRequest(BaseModel):
     workload_type: str = "batch"
     priority: str = "standard"
 
-# ── In-memory store ──────────────────────────────────────────────────────────
-
 submitted_workloads = []
-
-# ── Endpoints ───────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
 def root():
     return {"status": "online", "service": "GreenOrch API", "version": "1.0.0"}
+
+@app.get("/health", tags=["Health"])
+def health():
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 @app.get("/simulate", tags=["Simulation"])
 def run_simulation():
@@ -280,7 +183,6 @@ def run_simulation():
     results = []
     total_baseline = 0
     total_optimized = 0
-
     for wl in sample:
         sched = schedule_workload(wl["cpu_usage"], wl["execution_time"], wl.get("memory_usage", 0.5))
         total_baseline += sched["optimization"]["baseline_carbon"]
@@ -296,9 +198,7 @@ def run_simulation():
             "optimized_carbon": sched["optimization"]["optimized_carbon"],
             "reduction_pct": sched["optimization"]["reduction_pct"],
         })
-
     total_reduction = ((total_baseline - total_optimized) / total_baseline * 100) if total_baseline > 0 else 0
-
     return {
         "simulation_id": f"sim-{random.randint(10000,99999)}",
         "timestamp": datetime.now().isoformat(),
@@ -324,10 +224,7 @@ def get_regions():
 def get_carbon_data():
     data = []
     for rid, r in CARBON_REGIONS.items():
-        hourly = [
-            round(r["carbon_intensity"] * (1 + 0.15 * math.sin(h * math.pi / 12)), 3)
-            for h in range(24)
-        ]
+        hourly = [round(r["carbon_intensity"] * (1 + 0.15 * math.sin(h * math.pi / 12)), 3) for h in range(24)]
         data.append({
             "region_id": rid,
             "region_name": r["name"],
@@ -346,19 +243,16 @@ def get_carbon_data():
 @app.post("/workload", tags=["Workload"])
 def submit_workload(req: WorkloadRequest):
     if not (0 < req.cpu_load <= 1):
-        raise HTTPException(400, "cpu_load must be between 0 and 1")
+        raise HTTPException(status_code=400, detail="cpu_load must be between 0 and 1")
     if req.execution_time <= 0:
-        raise HTTPException(400, "execution_time must be positive")
-
+        raise HTTPException(status_code=400, detail="execution_time must be positive")
     hour = datetime.now().hour
     dow = datetime.now().weekday()
     predicted_cpu_list = ML_MODEL.predict([[hour, dow, req.execution_time, req.memory_usage]])
     predicted_cpu = max(0.05, min(0.99, predicted_cpu_list[0]))
-
     effective_cpu = (req.cpu_load * 0.7 + predicted_cpu * 0.3)
     sched = schedule_workload(effective_cpu, req.execution_time, req.memory_usage)
     wid = f"wl-{random.randint(100000, 999999)}"
-
     record = {
         "workload_id": wid,
         "selected_region": sched["selected_region"],
@@ -390,17 +284,10 @@ def get_metrics():
             "reduction_pct": round((baseline - optimized) / baseline * 100, 1),
             "workloads": random.randint(40, 120),
         })
-
     random.seed(77)
     region_dist = {rid: random.randint(5, 40) for rid in CARBON_REGIONS.keys()}
     total_wl = sum(region_dist.values())
-
-    total_saved = sum(
-        w["optimization"]["reduction_kg"]
-        for w in submitted_workloads
-        if w["optimization"]["reduction_kg"] > 0
-    )
-
+    total_saved = sum(w["optimization"]["reduction_kg"] for w in submitted_workloads if w["optimization"]["reduction_kg"] > 0)
     random.seed(55)
     return {
         "summary": {
@@ -413,23 +300,12 @@ def get_metrics():
         },
         "trend": trend,
         "region_distribution": [
-            {
-                "region_id": rid,
-                "region_name": CARBON_REGIONS[rid]["name"],
-                "workload_count": cnt,
-                "share_pct": round(cnt / total_wl * 100, 1)
-            }
+            {"region_id": rid, "region_name": CARBON_REGIONS[rid]["name"], "workload_count": cnt, "share_pct": round(cnt / total_wl * 100, 1)}
             for rid, cnt in sorted(region_dist.items(), key=lambda x: -x[1])
         ],
         "recent_workloads": submitted_workloads[-10:][::-1],
         "energy_by_region": [
-            {
-                "region_id": rid,
-                "region_name": CARBON_REGIONS[rid]["name"],
-                "avg_energy_kwh": round(random.uniform(0.05, 0.8), 3),
-                "carbon_intensity": CARBON_REGIONS[rid]["carbon_intensity"],
-                "renewable_pct": CARBON_REGIONS[rid]["renewable_pct"],
-            }
+            {"region_id": rid, "region_name": CARBON_REGIONS[rid]["name"], "avg_energy_kwh": round(random.uniform(0.05, 0.8), 3), "carbon_intensity": CARBON_REGIONS[rid]["carbon_intensity"], "renewable_pct": CARBON_REGIONS[rid]["renewable_pct"]}
             for rid in CARBON_REGIONS
         ],
     }
